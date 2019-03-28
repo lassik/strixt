@@ -1,0 +1,321 @@
+STRIXT(1)
+=========
+:doctype: manpage
+
+NAME
+----
+
+strixt - strict and opinionated text file check
+
+SYNOPSIS
+--------
+
+*strixt* [options] path ...
+
+DESCRIPTION
+-----------
+
+The *strixt* ("strict text") utility checks that the given text files
+strictly follow many Unicode, Unix and programming best practices.
+These practices have evolved over time to avoid pitfalls that cause
+compatibility problems when moving text from one operating system or
+application to another. They also help avoid familiar-looking text
+where the underlying characters are not what you expect them to be.
+
+strixt is ideally suited to run before checking source code into a
+version control system, so that the programming team can spend their
+time solving more productive problems.
+
+strixt is intentionally designed to be highly opinionated with almost
+no options. Many of its conventions derive from long and bitter
+experience; having these conventions always checked means that less
+experienced programmers will reap the benefits more widely. Another
+reason is to reduce "bikeshedding" and overchoice.
+
+The full list of checked conventions follows.
+
+CHECKED CONVENTIONS
+-------------------
+
+Clean Unicode
+~~~~~~~~~~~~~
+
+* UTF-8 character encoding
+
+* No UTF-8 encoding errors
+
+* No byte order mark (BOM)
+
+* No surrogate pairs
+
+* Unicode Normalization Form C (NFC)
+
+* No ASCII page breaks (^L marks)
+
+* No ASCII control characters (except LF and in some cases tab)
+
+* No Latin-1 (ISO-8859-1) control characters
+
+* No smart quotes or smart dashes
+
+* No superscripts, subscripts or fractions
+
+Unix newlines
+~~~~~~~~~~~~~
+
+* All newlines are Unix newlines (LF)
+
+* No Windows newlines (CR LF)
+
+* No old home computer newlines (CR)
+
+* No fancy Unicode newlines (NEL, LS, PS)
+
+* The file ends in a single Unix newline
+
+Blank lines
+~~~~~~~~~~~
+
+* No blank lines at the beginning of the file
+
+* No blank lines at the end of the file
+
+* No more than two consecutive blank lines
+
+Trailing whitespace
+~~~~~~~~~~~~~~~~~~~
+
+* No invisible whitespace on blank lines
+
+* No invisible whitespace at the end of any line
+
+Leading whitespace
+~~~~~~~~~~~~~~~~~~
+
+* These complex rules are detailed in the "Indentation and alignment"
+  section below.
+
+Line length
+~~~~~~~~~~~
+
+* No line is wider than 79 characters
+
+Filenames
+~~~~~~~~~
+
+In addition to the contents of text files, their filenames are also
+checked. The names of binary files are also checked even though their
+contents are not. As are the names of directories and symbolic links.
+
+* Filename only contains ASCII characters
+
+* Filename does not contain control characters
+
+* Filename is not a case variant of another filename in same directory
+
+* Filename is not longer than 50 bytes (including extension)
+
+* Filename does not have unportable characters
+
+* Filename foes not contain # or ~ (backup files)
+
+* Filename does not start or end with spaces
+
+* Filename does not contain more than one consecutive space
+
+* Filename does not consist entirely of dots and spaces
+
+* Filename does not end with a dot
+
+* Filename does not contain more than one consecutive dot
+
+* Punctuation is not preceded by a space
+
+* Filename does not contain any of the characters forbidden by
+  Windows:
+
+    / ? < > \ : * | " ^
+
+* Filename does not contain the following error-prone characters:
+
+* def not ok  ; ! # $ % & ` ' ( ) [ ] { } ~ ,
+
+* maybe ok    + = @
+
+* def ok      . _ -
+
+* Filename is not one of the Windows reserved filenames (in any case
+  variant):
+
+    nul  con  prn
+    com1 com2 com3 com4 com5 com6 com7 com8 com9
+    lpt1 lpt2 lpt3 lpt4 lpt5 lpt6 lpt7 lpt8 lpt9
+
+INDENTATION AND ALIGNMENT (TABS VS SPACES)
+------------------------------------------
+
+By default, strixt does not allow any tabs in text files. All
+indentation must be done using spaces.
+
+You can relax this rule with the *-t* option to allow tabs in certain
+file formats. For example, tabs are widely used in C and Go code and
+mandatory in makefiles, so you could use:
+
+    -t c,h,go,makefile
+
+Even the *-t* option is strict. Tabs are never allowed except at the
+very beginning of a line. If there are both tabs and spaces at the
+beginning of a line, all of the tabs must come first, and then spaces.
+This rule is widely known as "tabs for indentation, spaces for
+alignment". It is preferred by most experienced programmers who like
+tabs. It lets people configure their text editor to use any tab width
+they prefer without messing up the visual alignment of the code.
+
+strixt itself does not have a tab width setting because the sensible
+way to use tabs is to reserve them only for indentation and not to mix
+tab and space indentation in the same file. Files that follow this
+discipline display correctly with any tab width setting so strixt does
+not need to know what tab width was used by the author of the file.
+
+In line length calculations, strixt is conservative and assumes that a
+tab is as wide as 8 spaces. That is the widest popular width.
+
+strixt does not support the recently proposed "elastic tabstops"
+convention because strixt is designed for teams who favor reliability
+over convenience. Elastic tabstops are not widely supported and are
+likely to cause problems, so they are opposed to strixt's priorities.
+
+WHY SPACES (NOT TABS) ARE THE DEFAULT
+-------------------------------------
+
+Problems with spaces are easier to avoid than problems with tabs, so
+teams that want to be strict about their text formatting in order to
+avoid problems are better off using spaces. This is particularly true
+in languages like Python and Haskell where indentation is often the
+only cue that signifies block structure.
+
+Of course, files indented with spaces can still be indented with the
+wrong number of spaces. strixt cannot check this because it cannot
+tell whether some whitespace at the beginning of a line is meant to
+indent or to align.
+
+strixt also cannot check whether files meant to use tabs have been
+accidentally indented with spaces instead. That's because code
+indented with tabs still uses spaces in special situations:
+
+* Most code indented using tabs still uses spaces for alignment. When
+  strixt encounters some whitespace at the beginning of a line, it
+  cannot figure out whether that whitespace is meant to be indentation
+  or alignment. Beyond the default no-tabs-anywhere check, which is
+  simple to implement, strixt has no choice but to assume that the
+  programmer knew what they were doing, and used the correct type and
+  amount of whitespace for the line. It's almost impossible to
+  reliably tell apart indentation and alignment without intimate
+  knowledge of the language. Any rule of thumb we could come up with
+  would have exceptions.
+
+* Multi-line string literals. If a language indents with tabs, but has
+  a multi-line string literal that ought to indent with spaces, then
+  strixt won't warn about accidental tabs inside the string literal.
+  Strings are impossible to parse reliably without intimate knowledge
+  of the syntax of a particular language.
+
+* C-style winged comments are commonly indented with an extra space as
+  below. Reliably telling whether or not we're inside a comment would
+  basically require a complete lexical analyzer for the language.
+
+    /*
+     * This line is indented one space deeper than the last
+     * so that the stars align.
+     */
+
+Bottom line: If you want to ensure that exactly the right number of
+tabs and spaces have been used for indentation and alignment, your
+only option is to use a tool tailored to the particular language you
+are working with. There is no way to have reliable checks in a general
+purpose tool like strixt. The only simple and reliable checks are that
+there are no tabs if you don't want them, and that tabs only appear at
+the beginning of a line, not in the middle. So those are what we do.
+
+REPORT OUTPUT
+-------------
+
+The default output resembles a compiler's output: For valid files, no
+output is shown (unless -v is given). For invalid files, each peeve is
+shown with the filename, line number, column number and error message.
+
+OPTIONS
+-------
+
+*-t* <suffixes>::
+     Tabs are allowed in text files when their filenames match one of
+     these suffixes. The suffixes are comma separated. A suffix
+     matches a filename when it's preceded by a dot or the beginning
+     of the filename. So the suffix "makefile" matches the files
+     "makefile" and ".makefile" and "foo.makefile" and
+     "foo.bar.makefile". The suffix "c" matches the files "c" and ".c"
+     and "foo.c" and "foo.bar.c". The suffix "lisp.c" matches the
+     files "lisp.c" and ".lisp.c" and "foo.lisp.c" and
+     "foo.bar.lisp.c". Etc.
+
+*--write*::
+     Write fixes back to files, i.e. modify files in place. Without
+     this option, strixt just complains about things without doing
+     anything to fix them. With this option, it both complains and
+     fixes. Most peeves can be fixed automatically by this option, but
+     not all of them. Filenames are never changed.
+
+*--stdin*::
+     Check text from standard input instead of named files. If
+     *--write* is also given, then the fixed text is written to
+     standard output. If *--write* is not given, then nothing is
+     written to standard output. In any case, peeves are reported to
+     standard error as usual. strixt checks whether standard input is
+     binary data using the same heuristic as it normally does to check
+     for binary files. If it is binary data and *--write* is given,
+     then the data is copied byte-for-byte to standard output (except
+     if standard output is a terminal, in which case nothing is to
+     standard output). In any case, the exit status can be used to
+     check whether the data was binary.
+
+*--report*::
+     * compiler -- file:line:column: error: message to standard error
+     * xhtml -- valid XHTML file to standard output
+     * list -- names of invalid files to standard output
+
+*-v*::
+     Verbose.
+
+*-h*, *--help*::
+     Help. Show a short help message and exit.
+
+*--version*::
+     Show version information and exit.
+
+SCRIPTING
+---------
+
+Exit code:
+
+* 0 -- no peeves found
+* 1 -- peeves found, all of them were fixed
+* 2 -- peeves found, not all of them were fixed
+* 3 -- one or more binary files were found
+* larger number -- other error
+
+File descriptors:
+
+0 (standard input)::
+
+     Used only when `--stdin` is given to read text or binary data.
+
+1 (standard output)::
+
+     Used when `--stdin` and `--write` are given to write data. strixt
+     will not write binary data to stdout when stdout is a terminal.
+     Also used by some report formats to write the report.
+
+2 (standard error)::
+
+     Used by some report formats to write the report.
+     Always used for general errors that don't fit in the report.
