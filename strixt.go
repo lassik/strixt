@@ -49,7 +49,7 @@ func readUpToNBytes(filepath string, n int) []byte {
 	b := make([]byte, n)
 	f, err := os.Open(filepath)
 	if err != nil {
-		return b[:0]
+		return []byte{}
 	}
 	defer f.Close()
 	nread, err := f.Read(b)
