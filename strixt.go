@@ -65,8 +65,8 @@ func isBinaryFile(filepath string) bool {
 }
 
 func containsNonTabs(s string) bool {
-	for _, byte := range s {
-		if byte != 0x09 {
+	for byteIdx := 0; byteIdx < len(s); byteIdx++ {
+		if s[byteIdx] != 0x09 {
 			return true
 		}
 	}
