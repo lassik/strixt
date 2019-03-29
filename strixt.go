@@ -53,6 +53,9 @@ func readUpToNBytes(filepath string, n int) []byte {
 	}
 	defer f.Close()
 	nread, err := f.Read(b)
+	if err != nil {
+		return []byte{}
+	}
 	return b[:nread]
 }
 
