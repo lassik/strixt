@@ -22,6 +22,7 @@ var verbosity = info
 var tabs = false
 
 const MaxTextFileSize = 64 * 1024
+const MaxShownPeevesPerFile = 10
 
 // multipleBlankLines
 // blankLinesAtStart
@@ -152,7 +153,12 @@ func walkEnt(entpath string, depth int) {
 	} else {
 		peeves := analyzeTextFile(entpath)
 		if len(peeves) > 0 {
-			for _, peeve := range peeves {
+			for i, peeve := range peeves {
+                                if i >= MaxShownPeevesPerFile {
+                                        fmt.Printf("%s: too many errors\n",
+                                                entpath)
+                                        break
+                                }
 				fmt.Printf("%s:%d:%d: error: %s\n",
 					entpath, peeve.lineNo, peeve.column,
 					peeve.message)
