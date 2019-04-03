@@ -271,6 +271,13 @@ func main() {
 			walk(ent)
 		}
 	}
+	if verbosity >= verbose {
+		if anyFilesHadPeeves {
+			fmt.Println("strixt found errors")
+		} else {
+			fmt.Println("strixt all ok")
+		}
+	}
 	if anyFilesHadPeeves {
 		os.Exit(1)
 	}
