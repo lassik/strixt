@@ -24,26 +24,33 @@ var tabs = false
 const MaxTextFileSize = 64 * 1024
 const MaxShownPeevesPerFile = 10
 
-// multipleBlankLines
-// blankLinesAtStart
-// blankLinesAtEnd
-// whitespaceAtEol
-
 const asciiControl = "ASCII control character"
 const asciiFormFeed = "ASCII page separator ^L"
-const carriageReturn = "carriage return"
+const carriageReturn = "file contains carriage return"
 const nonUtf8Bytes = "invalid UTF-8 sequence"
-const tabForAlignment = "tab after non-tab"
+const tabForAlignment = "tabs not allowed after non-tab characters on a line"
 const tabsNotAllowed = "tabs not allowed (use -t to allow)"
 
+const whitespaceOnBlankLine = "invisible whitespace on blank line"
+const whitespaceAtEndOfLine = "invisible whitespace at end of line"
+const blankLineAtStartOfFile = "blank line(s) at beginning of file"
+const blankLineAtEndOfFile = "blank line(s) at end of file"
+const noNewlineAtEndOfFile = "no newline at end of file"
+
+const maxLineLength = 79
+const lineTooLong = "line longer than 79 characters"
+
+const maxConsecutiveBlankLines = 2
+const tooManyBlankLines = "more than 2 consecutive blank lines"
+
 type Peeve struct {
-	lineNo  int
-	column  int
-	message string
+	humanLn  int
+	humanCol int
+	message  string
 }
 
-func addPeeve(peeves []Peeve, lineNo, column int, message string) []Peeve {
-	return append(peeves, Peeve{lineNo, column, message})
+func addPeeve(peeves []Peeve, humanLn, humanCol int, message string) []Peeve {
+	return append(peeves, Peeve{humanLn, humanCol, message})
 }
 
 func readUpToNBytes(filepath string, n int) []byte {
@@ -65,55 +72,125 @@ func isBinaryFile(filepath string) bool {
 	return bytes.Count(b, []byte{0}) > 0
 }
 
-func containsNonTabs(s string) bool {
-	for byteIdx := 0; byteIdx < len(s); byteIdx++ {
-		if s[byteIdx] != 0x09 {
-			return true
-		}
-	}
-	return false
+func isSpaceByte(c byte) bool {
+	return c == 0x09 || c == 0x20
 }
 
 func analyzeTextFile(filepath string) []Peeve {
 	ps := []Peeve{}
 	b := readUpToNBytes(filepath, MaxTextFileSize)
-	ln := 1
-	col := 1
-	lineText := ""
-	for _, byte := range b {
+	hadAnyNonblankLines := false
+	consecutiveBlankLines := 0
+	humanLn := 0
+	humanCol := 0
+	lineLeadingTabs := 0
+	lineLeadingSpaces := 0
+	lineMiscLeadingWhite := 0
+	lineStartByteOffset := 0
+	isNewline := true
+	for byteOffset, byte := range b {
+		if isNewline {
+			// beginning of line
+			humanLn++
+			humanCol = 1
+			lineLeadingTabs = 0
+			lineLeadingSpaces = 0
+			lineMiscLeadingWhite = 0
+			lineStartByteOffset = byteOffset
+		}
+		// beginning of new byte on line
+		byteHumanColWidth := 1
+		byteOffsetOnLine := byteOffset - lineStartByteOffset
+		isNewline = false
 		if byte < 0x09 {
-			ps = addPeeve(ps, ln, col, asciiControl)
+			ps = addPeeve(ps, humanLn, humanCol, asciiControl)
 		} else if byte == 0x09 {
 			if !tabs {
-				ps = addPeeve(ps, ln, col, tabsNotAllowed)
+				ps = addPeeve(ps, humanLn, humanCol,
+					tabsNotAllowed)
 			}
-			if containsNonTabs(lineText) {
-				ps = addPeeve(ps, ln, col, tabForAlignment)
+			const maxTabWidth = 8
+			byteHumanColWidth = maxTabWidth -
+				((humanCol - 1) % maxTabWidth)
+			if byteOffsetOnLine == lineLeadingTabs {
+				lineLeadingTabs++
 			} else {
-				lineText += string(byte)
+				if tabs {
+					ps = addPeeve(ps, humanLn, humanCol,
+						tabForAlignment)
+				}
+				if byteOffsetOnLine ==
+					lineLeadingTabs+lineLeadingSpaces {
+					lineMiscLeadingWhite++
+				}
 			}
 		} else if byte == 0x0a {
-			ln++
-			col = 1
-			lineText = ""
-			continue
+			isNewline = true
 		} else if byte == 0x0b {
-			ps = addPeeve(ps, ln, col, asciiControl)
+			ps = addPeeve(ps, humanLn, humanCol, asciiControl)
 		} else if byte == 0x0c {
-			ps = addPeeve(ps, ln, col, asciiFormFeed)
+			ps = addPeeve(ps, humanLn, humanCol, asciiFormFeed)
 		} else if byte == 0x0d {
-			ps = addPeeve(ps, ln, col, carriageReturn)
+			ps = addPeeve(ps, humanLn, humanCol, carriageReturn)
 		} else if byte < 0x20 {
-			ps = addPeeve(ps, ln, col, asciiControl)
+			ps = addPeeve(ps, humanLn, humanCol, asciiControl)
 		} else if byte == 0x20 {
-			// space
+			if byteOffsetOnLine ==
+				lineLeadingTabs+lineLeadingSpaces {
+				lineLeadingSpaces++
+			} else if byteOffsetOnLine ==
+				lineLeadingTabs+
+					lineLeadingSpaces+
+					lineMiscLeadingWhite {
+				lineMiscLeadingWhite++
+			}
 		} else if byte < 0x7f {
 			// ascii visible
 		} else if byte == 0x7f {
-			ps = addPeeve(ps, ln, col, asciiControl)
-		} else {
+			ps = addPeeve(ps, humanLn, humanCol, asciiControl)
 		}
-		col++
+		if !isNewline {
+			humanCol += byteHumanColWidth
+			continue
+		}
+		// end of line
+		lineLengthBytes := byteOffsetOnLine
+		isBlankLine := lineLengthBytes ==
+			lineLeadingTabs+lineLeadingSpaces+lineMiscLeadingWhite
+		if isBlankLine {
+			consecutiveBlankLines++
+			if !hadAnyNonblankLines {
+				if consecutiveBlankLines == 1 {
+					ps = addPeeve(ps, humanLn, humanCol,
+						blankLineAtStartOfFile)
+				}
+			} else if consecutiveBlankLines >
+				maxConsecutiveBlankLines {
+				ps = addPeeve(ps, humanLn, humanCol,
+					tooManyBlankLines)
+			}
+		} else {
+			consecutiveBlankLines = 0
+			hadAnyNonblankLines = true
+		}
+		if humanCol > maxLineLength {
+			ps = addPeeve(ps, humanLn, humanCol, lineTooLong)
+		}
+		if isBlankLine && lineLengthBytes > 0 {
+			ps = addPeeve(ps, humanLn, humanCol,
+				whitespaceOnBlankLine)
+		}
+		if !isBlankLine && isSpaceByte(b[byteOffset-1]) {
+			ps = addPeeve(ps, humanLn, humanCol,
+				whitespaceAtEndOfLine)
+		}
+	}
+	// end of file
+	if consecutiveBlankLines > 0 {
+		ps = addPeeve(ps, humanLn, humanCol, blankLineAtEndOfFile)
+	}
+	if !isNewline {
+		ps = addPeeve(ps, humanLn, humanCol, noNewlineAtEndOfFile)
 	}
 	return ps
 }
@@ -154,13 +231,15 @@ func walkEnt(entpath string, depth int) {
 		peeves := analyzeTextFile(entpath)
 		if len(peeves) > 0 {
 			for i, peeve := range peeves {
-                                if i >= MaxShownPeevesPerFile {
-                                        fmt.Printf("%s: too many errors\n",
-                                                entpath)
-                                        break
-                                }
+				if i >= MaxShownPeevesPerFile {
+					fmt.Printf("%s: too many errors\n",
+						entpath)
+					break
+				}
 				fmt.Printf("%s:%d:%d: error: %s\n",
-					entpath, peeve.lineNo, peeve.column,
+					entpath,
+					peeve.humanLn,
+					peeve.humanCol,
 					peeve.message)
 			}
 		} else if verbosity >= verbose {
